@@ -34,18 +34,30 @@ homicide_df =
     victim_race %in% c("White", "Black"))
 ```
 
-* **Q1.2: For the city of Baltimore, MD, use the glm function to fit a logistic regression with resolved vs unresolved as the outcome and victim age, sex and race as predictors. 
+* **Q1.2: For the city of Baltimore, MD, use the glm function to fit a logistic regression with resolved vs unresolved as the outcome and victim age, sex and race as predictors. Save the output of glm as an R object; apply the broom::tidy to this object; and obtain the estimate and confidence interval of the adjusted odds ratio for solving homicides comparing male victims to female victims keeping all other variables fixed.**
 
-Save the output of glm as an R object; 
+```{r}
+# fit the logistic regression model for Baltimore, MD
+baltimore_glm = 
+  homicide_df |> 
+  filter(city_state == "Baltimore, MD") |> 
+  glm(resolved ~ victim_age + victim_sex + victim_race, family = binomial(), data = _)
 
-apply the broom::tidy to this object; 
-
-and obtain the estimate and confidence interval of the adjusted odds ratio for solving homicides comparing male victims to female victims keeping all other variables fixed.**
-
-
-
-
-
+baltimore_glm |> 
+  broom::tidy(conf.int = TRUE) |> 
+  mutate(
+    OR = exp(estimate), 
+    OR_CI_lower = exp(conf.low),
+    OR_CI_upper = exp(conf.high)) |> 
+  filter(term == "victim_sexMale") |> 
+  select(OR, OR_CI_lower, OR_CI_upper) |> 
+  knitr::kable(
+    digits = 3,
+    col.names = c("Odds Ratio", "95% CI Lower", "95% CI Upper"),
+    caption = "Table1: Estimate of Adjusted Odds Ratio for Male vs. Female Victims in Baltimore, MD", 
+    align = "c")
+```
+The adjusted odds ratio for solving homicides comparing male victims to female victims in Baltimore is 0.426 (95% CI: 0.324, 0.558). This indicates that, holding victim age and race constant, homicides with male victims are significantly less likely to be resolved than those with female victims. Specifically, the odds of resolution for a male victim are approximately 43% of the odds for a female victim.
 
 * **Q1.3: Now run glm for each of the cities in your dataset, and extract the adjusted odds ratio (and CI) for solving homicides comparing male victims to female victims. Do this within a “tidy” pipeline, making use of purrr::map, list columns, and unnest as necessary to create a dataframe with estimated ORs and CIs for each city.**
 
