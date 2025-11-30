@@ -176,20 +176,81 @@ birthweight_df =
 birthweight_df |> 
   map(~sum(is.na(.)))
 ```
+We've loaded and cleaned the datasets. No missing values were observed in the dataset.
 
 * **Q3.2: Propose a regression model for birthweight. This model may be based on a hypothesized structure for the factors that underly birthweight, on a data-driven model-building process, or a combination of the two. Describe your modeling process and show a plot of model residuals against fitted values – use add_predictions and add_residuals in making this plot.**
 
+```{r}
+model_bthweight = lm(bwt ~ babysex + bhead + blength + gaweeks + smoken + delwt, data = birthweight_df)
 
+# plot residuals against fitted values
+birthweight_df |> 
+  add_predictions(model_bthweight) |> 
+  add_residuals(model_bthweight) |> 
+  ggplot(aes(x = pred, y = resid)) + 
+  geom_point(alpha = 0.5, color = "grey") +
+  geom_hline(yintercept = 0, color = "orange", linetype = "dashed") + 
+  labs(
+    title = "Residuals vs. Fitted Values",
+    x = "Fitted Values (Predicted Birthweight in grams)",
+    y = "Residuals"
+  ) +
+  theme_minimal()
+```
 
+I proposed a regression model based on a hypothesized structure of biological factors that influence birthweight. 
 
+Specifically, I included the baby’s physical characteristics (head circumference `bhead`, length `blength`, sex `babysex`, and gestational age `gaweeks`) because these are direct indicators of fetal growth and development. 
 
+I also included maternal characteristics (mother’s weight at delivery `delwt` and smoking habits `smoken`) as they are well-established environmental factors that affect fetal health. This combination aims to capture both the genetic/developmental and environmental aspects of birthweight.
 
+The plot of model residuals against fitted values shows a cluster of points centered around the zero line, which generally indicates a good fit for the majority of the data. 
 
+* **Q3.3: Compare your model to two others: One using length at birth and gestational age as predictors (main effects only). One using head circumference, length, sex, and all interactions (including the three-way interaction) between these. Make this comparison in terms of the cross-validated prediction error; use crossv_mc and functions in purrr as appropriate.**
 
+```{r}
+# create the cross-validation splits 
+cv_df = 
+  crossv_mc(birthweight_df, 100) |> 
+  mutate(
+    train = map(train, as_tibble),
+    test = map(test, as_tibble))
 
+# fit 3 models and calculate RMSE
+cv_results = 
+  cv_df |> 
+  mutate(
+    # model 1: my proposed model
+    my_model  = map(train, \(df) lm(bwt ~ babysex + bhead + blength + gaweeks + smoken + delwt, data = df)),
+    # model 2: main effects only (length + gestational age)
+    main_mod  = map(train, \(df) lm(bwt ~ blength + gaweeks, data = df)),
+    # model 3: interaction model (head circ * length * sex)
+    inter_mod = map(train, \(df) lm(bwt ~ bhead * blength * babysex, data = df))) |> 
+  mutate(
+    # calculate RMSE for each model
+    rmse_my_model = map2_dbl(my_model, test, \(mod, df) rmse(model = mod, data = df)),
+    rmse_main_mod = map2_dbl(main_mod, test, \(mod, df) rmse(model = mod, data = df)),
+    rmse_inter_mod = map2_dbl(inter_mod, test, \(mod, df) rmse(model = mod, data = df)))
 
+# visualize the comparison
+cv_results |> 
+  select(starts_with("rmse")) |> 
+  pivot_longer(
+    everything(),
+    names_to = "model", 
+    values_to = "rmse",
+    names_prefix = "rmse_"
+  ) |> 
+  mutate(model = fct_inorder(model)) |> 
+  ggplot(aes(x = model, y = rmse)) + 
+  geom_violin() + 
+  labs(
+    title = "Cross-validated Prediction Error (RMSE)",
+    x = "Model",
+    y = "Root Mean Squared Error"
+  ) +
+  theme_minimal()
+```
 
-
-
-
+The cross-validation results show that my_model (the proposed model) has the lowest RMSE distribution, indicating it provides the most accurate predictions among the three candidates. The `main_mod` (length + gestational age only) performs the worst with the highest error, demonstrating that omitting head circumference significantly reduces predictive power. The `inter_mod` (interactions) performs better than the main effects model but still trails the proposed model, likely because it captures complex physical interactions but misses critical environmental factors like maternal smoking.
 
