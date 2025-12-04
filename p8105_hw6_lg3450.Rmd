@@ -22,7 +22,7 @@ We first clean the dataset based on the requirements.
 
 ```{r warning=FALSE, message=FALSE}
 homicide_df = 
-  read_csv("../homicide-data.csv") |>   
+  read_csv("data/homicide-data.csv") |>   
   mutate(
     # create city_state variable
     city_state = str_c(city, ", ", state),
@@ -111,12 +111,11 @@ city_glm_results |>
   geom_hline(yintercept = 1, linetype = "dashed", color = "orange") +
   coord_flip() +
   labs(
-    title = "Odds Ratios for Solving Homicides (Male vs. Female Victims)",
-    x = "City",
-    y = "Odds Ratio (Male vs. Female)"
+    title = "Adjusted Odds Ratios and 95%CI for Solving Homicides (Male vs. Female Victims)",
+    x = "City, State",
+    y = "Adjusted Odds Ratio (Male vs. Female)"
   ) +
-  theme_minimal() +
-  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+  theme_minimal() 
 ```
 
 The plot illustrates that for the vast majority of cities, the estimated odds ratio (OR) is less than 1, indicating that homicides with male victims are less likely to be resolved than those with female victims, after adjusting for victim age and race.
@@ -140,6 +139,7 @@ central_park_df =
     tmin = as.numeric(tmin),
     tmax = as.numeric(tmax),
     prcp = as.numeric(prcp)) |> 
+  drop_na(tmax, tmin, prcp) |>
   select(name, id, everything())
 ```
 
@@ -206,10 +206,13 @@ boot_results |>
   ) +
   theme_minimal()
 ```
+
 The distribution of the estimated r-squared values is unimodal and approximately normal, though slightly left-skewed. The estimates are centered around 0.91 or 0.92, with the majority of values falling between 0.89 and 0.93. The distribution has a slight tail extending towards lower values (around 0.87).Overall, the high estimated r-squared values indicate that `tmin` and `prcp` are strong predictors, consistently explaining a large proportion (over 90%) of the variance in `tmax` across the bootstrap samples.
 
 ```{r}
-boot_results |> 
+#original version without filtering
+plot_without_filter = 
+  boot_results |> 
   ggplot(aes(x = beta_ratio)) +
   geom_density(fill = "orange", alpha = 0.5) +
   labs(
@@ -218,11 +221,32 @@ boot_results |>
     y = "Density"
   ) +
   theme_minimal()
+plot_without_filter
 ```
 
 The distribution of the ratio of estimated beta1 / estimated beta2 is extremely left-skewed and heavy-tailed. The plot shows a sharp peak near zero, but the x-axis range extends to nearly -2,000,000 due to extreme outliers.This behavior occurs because the estimated coefficient for precipitation is often very small and close to zero. When a bootstrap sample yields a precipitation coefficient that is near-zero and negative, dividing the temperature coefficient by it results in a massive negative ratio. These outliers visually compress the majority of the estimates into a single narrow spike.
 
+```{r}
+ratio_filtered = 
+  boot_results |>
+  filter(beta_ratio > quantile(beta_ratio, 0.005),
+         beta_ratio < quantile(beta_ratio, 0.995))
 
+plot_with_filter = 
+  ratio_filtered |> 
+  ggplot(aes(x = beta_ratio)) +
+  geom_density(fill = "orange", alpha = 0.5) +
+  labs(
+    title = "Distribution of Bootstrap Estimates for Beta Ratio (tmin / prcp)",
+    x = "Estimate (tmin / prcp)",
+    y = "Density"
+  ) +
+  theme_minimal()
+
+plot_with_filter
+```
+
+After filtering out the extreme values, the distribution is approximately normal and centered around 0.94, indicating that the model consistently explains a high proportion of the variance in maximum temperature. The distribution of the ratio $\hat{\beta}_{tmin} / \hat{\beta}_{prcp}$ is left-skewed, with the majority of estimates falling between -400 and -100. However, the full distribution is extremely heavy-tailed containing outliers beyond $\pm 20,000$ (omitted from the plot for clarity), which result from bootstrap samples with near-zero precipitation coefficients.
 
 # Problem3
 **In this problem, you will analyze data gathered to understand the effects of several variables on a child’s birthweight. This dataset, available here, consists of roughly 4000 children.**
@@ -232,7 +256,7 @@ The distribution of the ratio of estimated beta1 / estimated beta2 is extremely 
 ```{r show_col_types = FALSE, message=FALSE}
 
 birthweight_df = 
-  read_csv("../birthweight.csv") |> 
+  read_csv("data/birthweight.csv") |> 
   janitor::clean_names() |>
   mutate(
     babysex = factor(babysex, 
